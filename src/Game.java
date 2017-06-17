@@ -132,6 +132,7 @@ public class Game {
     }
 
     public Cell shoot() {
+        while(!shotsQueue.isEmpty() && shotsQueue.peek().isShot()) shotsQueue.poll(); //remove duplicates, i.e. cells that have had priority updated
         Cell nextShot = shotsQueue.poll();
         nextShot.setShot();
         shots.add(nextShot);
@@ -169,11 +170,11 @@ public class Game {
                     blockEnd = follow(focal, 0, delta);
                     break;
             }
-            if (blockEnd != null) blockEnd.setPriority(PRIORITY_BLOCK_END);
+            if (blockEnd != null) shotsQueue.add(new Cell(blockEnd.getY(), blockEnd.getX(), PRIORITY_BLOCK_END));
         } else if (oppositeIsHit(focal, direction, delta)) {
-            focal.setPriority(PRIORITY_BLOCK_END);
+            shotsQueue.add(new Cell(focal.getY(), focal.getX(), PRIORITY_BLOCK_END));
         } else {
-            focal.setPriority(PRIORITY_HIT_NEIGHBOR);
+            shotsQueue.add(new Cell(focal.getY(), focal.getX(), PRIORITY_HIT_NEIGHBOR));
         }
     }
 
@@ -203,7 +204,7 @@ public class Game {
         final int offset = -delta * 2;
         int oppositeX = direction == Direction.VERTICAL ? focal.getX() : focal.getX() + offset;
         int oppositeY = direction == Direction.VERTICAL ? focal.getY() + offset : focal.getY();
-        return onGrid(oppositeY, oppositeX) && grid[oppositeY][oppositeY].isHit();
+        return onGrid(oppositeY, oppositeX) && grid[oppositeY][oppositeX].isHit();
     }
 
     /*

@@ -9,6 +9,16 @@ public class Cell implements Comparable<Cell> {
     private boolean hasShip;
     private boolean isShot;
 
+    public Cell(int y, int x, int priority) {
+        this.y = y;
+        this.x = x;
+        this.priority = priority;
+    }
+
+    public Cell(int y, int x) {
+        this(y, x, 0);
+    }
+
     public int getY() {
         return y;
     }
@@ -16,24 +26,6 @@ public class Cell implements Comparable<Cell> {
     public int getX() {
         return x;
     }
-
-    public Cell(int y, int x) {
-        this.y = y;
-        this.x = x;
-    }
-
-
-    /*
-    public void setHit() {
-        isShot = true;
-        hasShip = true;
-    }
-
-    public void setMiss() {
-        isShot = true;
-        hasShip = false;
-    }
-    */
 
     public void setHasShip() {
         this.hasShip = true;
@@ -62,13 +54,6 @@ public class Cell implements Comparable<Cell> {
     public boolean isShot() {
         return isShot;
     }
-
-    /*
-    public boolean containsShip() {
-        return hasShip;
-    }
-
-    */
 
     public int getPriority() {
         return priority;

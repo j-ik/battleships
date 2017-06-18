@@ -1,7 +1,39 @@
+import java.util.PriorityQueue;
+
 public class Main {
 
+    public static class Number implements Comparable<Number> {
+        int value;
+        
+        public Number(int value) {
+            this.value = value;
+        }
+        
+        public void setValue(int newValue) {
+            value = newValue;
+        }
+
+        @Override
+        public int compareTo(Number o) {
+            return -Integer.compare(this.value, o.value);
+        }
+    }
+    
+    
     public static void main(String[] args) {
 
+        
+        
+        Number a = new Number(1);
+        Number b = new Number(5);
+        Number c = new Number(10);
+        PriorityQueue<Number> pq = new PriorityQueue<>();
+        pq.add(a);
+        pq.add(b);
+        pq.add(c);
+        b.setValue(100);
+        pq.add(b);
+        
         Game game = new Game();
         Cell shot = game.shoot();
         shot = game.processLastShot(Game.ShotResult.MISS, shot.getY(), shot.getX(), -1);

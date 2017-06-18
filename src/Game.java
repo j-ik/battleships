@@ -160,30 +160,21 @@ public class Game {
      */
     public void updatePriority(int y, int x, Direction direction, int delta) {
         final Cell focal = grid[y][x];
+        Cell updated = focal;
+        int updatedY = focal.getY();
+        int updatedX = focal.getX();
         if (focal.isHit()) {
-            Cell blockEnd = null;
-            switch (direction) {
-                case VERTICAL:
-                    blockEnd = follow(focal, delta, 0);
-                    break;
-                case HORIZONTAL:
-                    blockEnd = follow(focal, 0, delta);
-                    break;
-            }
+            Cell blockEnd = direction == Direction.VERTICAL ? follow(focal, delta, 0) : follow(focal, 0, delta);
             if (blockEnd != null) {
-                int newY = blockEnd.getY();
-                int newX = blockEnd.getX();
-                Cell updated = new Cell(grid[newY][newX], PRIORITY_BLOCK_END);
-                grid[newY][newX] = updated;
-                shotsQueue.add(updated);
+                updatedY = blockEnd.getY();
+                updatedX = blockEnd.getX();
+                updated = new Cell(grid[updatedY][updatedX], PRIORITY_BLOCK_END);
             }
         } else {
-            int newY = focal.getY();
-            int newX = focal.getX();
-            Cell updated = new Cell(grid[newY][newX], oppositeIsHit(focal, direction, delta) ? PRIORITY_BLOCK_END : PRIORITY_HIT_NEIGHBOR);
-            grid[newY][newX] = updated;
-            shotsQueue.add(updated);
+            updated = new Cell(focal, oppositeIsHit(focal, direction, delta) ? PRIORITY_BLOCK_END : PRIORITY_HIT_NEIGHBOR);
         }
+        grid[updatedY][updatedX] = updated;
+        shotsQueue.add(updated);
     }
 
     @Nullable

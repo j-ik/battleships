@@ -170,11 +170,19 @@ public class Game {
                     blockEnd = follow(focal, 0, delta);
                     break;
             }
-            if (blockEnd != null) shotsQueue.add(new Cell(blockEnd.getY(), blockEnd.getX(), PRIORITY_BLOCK_END));
-        } else if (oppositeIsHit(focal, direction, delta)) {
-            shotsQueue.add(new Cell(focal.getY(), focal.getX(), PRIORITY_BLOCK_END));
+            if (blockEnd != null) {
+                int newY = blockEnd.getY();
+                int newX = blockEnd.getX();
+                Cell updated = new Cell(grid[newY][newX], PRIORITY_BLOCK_END);
+                grid[newY][newX] = updated;
+                shotsQueue.add(updated);
+            }
         } else {
-            shotsQueue.add(new Cell(focal.getY(), focal.getX(), PRIORITY_HIT_NEIGHBOR));
+            int newY = focal.getY();
+            int newX = focal.getX();
+            Cell updated = new Cell(grid[newY][newX], oppositeIsHit(focal, direction, delta) ? PRIORITY_BLOCK_END : PRIORITY_HIT_NEIGHBOR);
+            grid[newY][newX] = updated;
+            shotsQueue.add(updated);
         }
     }
 
@@ -182,10 +190,13 @@ public class Game {
     public Cell follow (Cell parent, int deltaY, int deltaX) {
         final int childY = parent.getY();
         final int childX = parent.getX();
-        if (!onGrid(childY, childX) || grid[childY][childX].isMiss()) return null; // block end out of grid or already tried to no avail
-        if (grid[childY][childX].isEmpty()) return grid[childY][childX]; // reached a block end that has not been tried yet -> makes a high prio candidate
-        follow(grid[childY][childX], deltaY, deltaX); // == cell is HIT -> continue following the sequence of hits to reach the block end
-        return null;
+        if (!onGrid(childY, childX) || grid[childY][childX].isMiss()) { // block end out of grid or already tried to no avail
+            return null;
+        } else if (grid[childY][childX].isEmpty()) { // reached a block end that has not been tried yet -> makes a high prio candidate
+            return grid[childY][childX];
+        } else {
+            return follow(grid[childY][childX], deltaY, deltaX); // == cell is HIT -> continue following the sequence of hits to reach the block end
+        }
     }
 
     public boolean onGrid(int x, int y) {

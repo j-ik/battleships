@@ -19,6 +19,14 @@ public class Cell implements Comparable<Cell> {
         this(y, x, 0);
     }
 
+    public Cell(Cell reference, int priority) {
+        this.y = reference.getY();
+        this.x = reference.getX();
+        this.hasShip = reference.hasShip;
+        this.isShot = reference.isShot;
+        this.priority = priority;
+    }
+
     public int getY() {
         return y;
     }

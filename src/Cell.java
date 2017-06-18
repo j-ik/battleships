@@ -8,6 +8,11 @@ public class Cell implements Comparable<Cell> {
     private int priority;
     private boolean hasShip;
     private boolean isShot;
+    private int shipID;
+    private static final char SYMBOL_EMPTY = '-';
+    private static final char SYMBOL_HIT_SHIP = 'X';
+    private static final char SYMBOL_MISS = 'o';
+    private char symbol;
 
     public Cell(int y, int x, int priority) {
         this.y = y;
@@ -67,8 +72,24 @@ public class Cell implements Comparable<Cell> {
         return priority;
     }
 
+    public boolean hasShip() {
+        return hasShip;
+    }
+
+    public void setShipID(int shipID) {
+        this.shipID = shipID;
+    }
+
     @Override
     public int compareTo(Cell o) {
         return -Integer.compare(this.priority, o.priority);
+    }
+
+
+    public char getSymbol() {
+        if (isEmpty()) return SYMBOL_EMPTY;
+        if (isMiss()) return SYMBOL_MISS;
+        if (isHit()) return SYMBOL_HIT_SHIP;
+        else return Character.forDigit(shipID, 10);
     }
 }

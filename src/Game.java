@@ -11,18 +11,34 @@ import com.sun.istack.internal.Nullable;
 
 /**
  * Created by jounikauremaa on 15/06/2017.
+ * TODO
+ * - Check whether safe to enter a duplicate object (same memory ref) to pq; if not -> refactor prio update logic so that 
+ * create a new Cell from the udpate cell (Cell updated = new Cell(old, <priority))
+ * - Update shooting logic to use Cell-based onGrid check (superfluent to use x and y coordinates) (cf. placement logic)
+ * - Randomize placement probing direction
+ * - Improved strategy for placement priority, now follows target priority, which is not feasible
+ * - Randomize higher priorities (HIT NEIGHBOR, BLOCK END), e.g. 1995-2005, 995-1005, so that "from same priority class" truly random is chosen
+ * - Smarter way to iterate up/down/left/right, ideally in a single loop, getNext etc.; could add here a direction randomizer
+ * - Add ship ID, at least for own grid, for grid print
+ * - Control logic: convert API-call output as data for methods, and call methods
+ * - UI
+ * - Server side
  */
 public class Game {
 
     private int turnId;
     private PriorityQueue<Cell> shotsQueue;
+    private PriorityQueue<Cell> placementQueue;
     private List<Cell> shots;
     private List<Cell> hits;
     private Map<Player, Set<Integer>> sunken;
-    private Cell[][] grid;
+    private Cell[][] targetGrid;
+    private Cell[][] ownGrid;
     private static final int GRID_SIZE = 10;
     private static final int PRIORITY_HIT_NEIGHBOR = 1000;
     private static final int PRIORITY_BLOCK_END = 2000;
+    private static final int SHIP_MAX_SIZE = 5;
+
 
     public enum Direction {VERTICAL, HORIZONTAL}
 
@@ -32,34 +48,80 @@ public class Game {
 
     public Game() {
         shotsQueue = new PriorityQueue<>();
+        placementQueue = new PriorityQueue<>();
         shots = new ArrayList<>();
         hits = new ArrayList<>();
         sunken = new HashMap<>();
         sunken.put(Player.OWN, new HashSet<>());
         sunken.put(Player.ENEMY, new HashSet<>());
-        grid = new Cell[GRID_SIZE][GRID_SIZE];
-        initializeTargetGrid();
+        targetGrid = new Cell[GRID_SIZE][GRID_SIZE];
+        ownGrid = new Cell[GRID_SIZE][GRID_SIZE];
+        initializeGrids();
     }
 
-    //TODO
-    public Cell[][] setOwnGrid() {
-        return null;
-    }
-
-    public void initializeTargetGrid() {
+    private void initializeGrids() {
         for (int i = 0; i < 10; i++) {
             for (int j = 0; j < 10; j++) {
-                Cell cell = new Cell(i, j);
-                cell.setPriority(getPriorityForTarget(i, j));
-                shotsQueue.add(cell);
-                grid[i][j] = cell;
+                Cell targetCell = new Cell(i, j);
+                targetCell.setPriority(getPriorityForTarget(i, j));
+                shotsQueue.add(targetCell);
+                targetGrid[i][j] = targetCell;
+                Cell ownCell = new Cell(i, j);
+                ownCell.setPriority(getPriorityForPlacement(i, j));
+                placementQueue.add(ownCell);
+                ownGrid[i][j] = ownCell;
             }
         }
+        placeShips();
+    }
+
+    private void placeShips() {
+        for (int size = 1; size <= SHIP_MAX_SIZE; size++) {
+            boolean placed = false;
+            while (!placed) {
+                Cell candidate = placementQueue.poll();
+                if (!placed) {
+                    //Up and down
+                    for (int deltaY = -1; deltaY <= 1; deltaY+=2) {
+                        if (enoughSpace(candidate, size, deltaY, 0)) {
+                            place(candidate, size , deltaY, 0, size);
+                            placed = true;
+                            break;
+                        }
+                    }
+                }
+                if (!placed) {
+                    //Left and right
+                    for (int deltaX = -1; deltaX <= 1; deltaX += 2) {
+                        if (enoughSpace(candidate, size, 0, deltaX)) {
+                            place(candidate, size, 0, deltaX, size);
+                            placed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+        }
+
+    }
+
+    private boolean enoughSpace(Cell focal, int size, int deltaY, int deltaX) {
+        if (size == 0) return true;
+        if (!onGrid(focal) || focal.hasShip()) return false;
+        return enoughSpace(ownGrid[focal.getY() + deltaY][focal.getX() + deltaX], size - 1, deltaY, deltaX);
+    }
+
+    private void place(Cell parent, int size, int deltaY, int deltaX, int shipID) {
+        if (size == 0) return;
+        parent.setHasShip();
+        parent.setShipID(shipID);
+        place (ownGrid[parent.getY() + deltaY][parent.getX() + deltaX], size - 1, deltaY, deltaX, shipID);
     }
 
     /**
      * Basic strategy for random shots (currently not trailing a HIT)
-     * Conceptualize grid as a chequered board, with (0,0) as black and (0,1) & (1,0) as white, the rest following this pattern
+     * Conceptualize targetGrid as a chequered board, with (0,0) as black and (0,1) & (1,0) as white, the rest following this pattern
      * Create priority for "blacks", and weight a diagonal line so that main diagonal tends to get highest priorities,
      * other diagonal lines the higher priorities the closer they are the main diagonal
      * @param y focal cell y coordinate
@@ -72,11 +134,23 @@ public class Game {
         return (GRID_SIZE - (Math.abs(y - x))) * random.nextInt(GRID_SIZE); //the closer to diagonal, the higher value; add a random weight
     }
 
+
+    /**
+     * Version 1: use same priority logic as for shooting (quite stupid, but done to get "something" done;
+     * a better version would need adhering to principles, e.g. using border cells etc.
+     * @param y
+     * @param x
+     * @return
+     */
+    public int getPriorityForPlacement(int y, int x) {
+        return y + x;
+    }
+
     /**
      * Process consequences of last round shot
      * - If hit, mark cell as containing a ship block update priorities of surrounding area of the hit as follows
      * 1) for each empty neighbor (not shot), set basic higher priority (i.e., mark neighbor as a likely container
-     * of a block and thus a "hot zone" -> updates neighbor cell priority, which moves the cell (referred to in grid)
+     * of a block and thus a "hot zone" -> updates neighbor cell priority, which moves the cell (referred to in targetGrid)
      * higher up in the heap of coming shots
      * 2) for each neighbor with a hit, follow the hits to that direction setting an empty "block end", i.e.
      * empty cell following a sequence of hits, with an even higher priority. So if we have say hit at (1,1)
@@ -100,14 +174,14 @@ public class Game {
             case MISS:
                 break; //Fall through
             case HIT:
-                grid[yLast][xLast].setHasShip();
-                hits.add(grid[yLast][xLast]);
+                targetGrid[yLast][xLast].setHasShip();
+                hits.add(targetGrid[yLast][xLast]);
 
                 //Up and down
                 for (int deltaY = -1; deltaY <= 1; deltaY+=2) {
                     int yNew = yLast + deltaY;
                     int xNew = xLast;
-                    if (!onGrid(yNew, xNew) || grid[yNew][xNew].isMiss()) continue;
+                    if (!onGrid(yNew, xNew) || targetGrid[yNew][xNew].isMiss()) continue;
                     updatePriority(yNew, xNew, Direction.VERTICAL, deltaY);
                 }
 
@@ -115,14 +189,14 @@ public class Game {
                 for (int deltaX = -1; deltaX <= 1; deltaX+=2) {
                     int yNew = yLast;
                     int xNew = xLast + deltaX;
-                    if (!onGrid(yNew, xNew) || grid[yNew][xNew].isMiss()) continue;
+                    if (!onGrid(yNew, xNew) || targetGrid[yNew][xNew].isMiss()) continue;
                     updatePriority(yNew, xNew, Direction.HORIZONTAL, deltaX);
                 }
 
                 break;
             case SUNK:
-                grid[yLast][xLast].setHasShip();
-                hits.add(grid[yLast][xLast]);
+                targetGrid[yLast][xLast].setHasShip();
+                hits.add(targetGrid[yLast][xLast]);
                 sunken.get(Player.ENEMY).add(shipId);
                 break;
             default:
@@ -159,34 +233,29 @@ public class Game {
      * @param delta increment, implicitly given by direction, explicate here; added either to x or y coordinate, depending on direction
      */
     public void updatePriority(int y, int x, Direction direction, int delta) {
-        final Cell focal = grid[y][x];
-        Cell updated = focal;
-        int updatedY = focal.getY();
-        int updatedX = focal.getX();
+        Cell focal = targetGrid[y][x];
         if (focal.isHit()) {
-            Cell blockEnd = direction == Direction.VERTICAL ? follow(focal, delta, 0) : follow(focal, 0, delta);
-            if (blockEnd != null) {
-                updatedY = blockEnd.getY();
-                updatedX = blockEnd.getX();
-                updated = new Cell(grid[updatedY][updatedX], PRIORITY_BLOCK_END);
-            }
+            //find end of block, set as focal
+            focal = direction == Direction.VERTICAL ? follow(focal, delta, 0) : follow(focal, 0, delta);
+            if (focal != null) {
+                focal.setPriority(PRIORITY_BLOCK_END);
+            } else return; //focal (end of block) is null, i.e. out of targetGrid or a miss
         } else {
-            updated = new Cell(focal, oppositeIsHit(focal, direction, delta) ? PRIORITY_BLOCK_END : PRIORITY_HIT_NEIGHBOR);
+            focal.setPriority(oppositeIsHit(focal, direction, delta) ? PRIORITY_BLOCK_END : PRIORITY_HIT_NEIGHBOR);
         }
-        grid[updatedY][updatedX] = updated;
-        shotsQueue.add(updated);
+        shotsQueue.add(focal);
     }
 
     @Nullable
     public Cell follow (Cell parent, int deltaY, int deltaX) {
-        final int childY = parent.getY();
-        final int childX = parent.getX();
-        if (!onGrid(childY, childX) || grid[childY][childX].isMiss()) { // block end out of grid or already tried to no avail
+        final int childY = parent.getY() + deltaY;
+        final int childX = parent.getX() + deltaX;
+        if (!onGrid(childY, childX) || targetGrid[childY][childX].isMiss()) { // block end out of targetGrid or a miss
             return null;
-        } else if (grid[childY][childX].isEmpty()) { // reached a block end that has not been tried yet -> makes a high prio candidate
-            return grid[childY][childX];
+        } else if (targetGrid[childY][childX].isEmpty()) { // reached a block end that has not been tried yet -> makes a high prio candidate
+            return targetGrid[childY][childX].getPriority() < PRIORITY_BLOCK_END ? targetGrid[childY][childX] : null; //return a cell to update only if lower than block end prio
         } else {
-            return follow(grid[childY][childX], deltaY, deltaX); // == cell is HIT -> continue following the sequence of hits to reach the block end
+            return follow(targetGrid[childY][childX], deltaY, deltaX); // == cell is HIT -> continue following the sequence of hits to reach the block end
         }
     }
 
@@ -206,12 +275,23 @@ public class Game {
         final int offset = -delta * 2;
         int oppositeX = direction == Direction.VERTICAL ? focal.getX() : focal.getX() + offset;
         int oppositeY = direction == Direction.VERTICAL ? focal.getY() + offset : focal.getY();
-        return onGrid(oppositeY, oppositeX) && grid[oppositeY][oppositeX].isHit();
+        return onGrid(oppositeY, oppositeX) && targetGrid[oppositeY][oppositeX].isHit();
     }
 
-    /*
     public boolean onGrid(Cell cell) {
         return (cell.getX() >= 0 && cell.getX() <= 9 && cell.getY() >= 0 && cell.getY() <= 9);
     }
-    */
+
+    public void printGrid(Player player) {
+        Cell[][] focal = player == Player.OWN ? ownGrid : targetGrid;
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < GRID_SIZE; i++) {
+            sb.append("[");
+            for (int j = 0; j < GRID_SIZE; j++) {
+                sb.append(focal[i][j].getSymbol());
+            }
+            sb.append("]\n");
+        }
+        System.out.println(sb.toString());
+    }
 }
